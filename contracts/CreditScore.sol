@@ -1,8 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-contract CreditScore {
+import "@openzeppelin/contracts/access/Ownable.sol";
 
+contract CreditScore is Ownable {
+    // Private state variables for percentage weights
+    uint256 private transactionVolumePercent;
+    uint256 private walletBalancePercent;
+    uint256 private transactionFrequencyPercent;
+    uint256 private transactionMixPercent;
+    uint256 private newTransactionsPercent;
+
+    // Structure to store user credit data
     struct UserCredit {
         uint256 transactionVolume;
         uint256 walletBalance;
@@ -12,62 +21,106 @@ contract CreditScore {
         uint256 creditScore;
     }
 
+    // Mapping from user address to their credit data
     mapping(address => UserCredit) private userCredits;
 
-    function updateTransactionVolume(address user, uint256 volume) external {
-        userCredits[user].transactionVolume = volume;
-        _updateCreditScore(user);
-    }
-
-    function updateWalletBalance(address user, uint256 balance) external {
-        userCredits[user].walletBalance = balance;
-        _updateCreditScore(user);
-    }
-
-    function updateTransactionFrequency(address user, uint256 frequency) external {
-        userCredits[user].transactionFrequency = frequency;
-        _updateCreditScore(user);
-    }
-
-    function updateTransactionMix(address user, uint256 mix) external {
-        userCredits[user].transactionMix = mix;
-        _updateCreditScore(user);
-    }
-
-    function updateNewTransactions(address user, uint256 newTx) external {
-        userCredits[user].newTransactions = newTx;
-        _updateCreditScore(user);
-    }
-
-    function getCreditScore(address user) external view returns (uint256) {
-        return userCredits[user].creditScore;
-    }
-
-    function _updateCreditScore(address user) internal {
-        UserCredit storage credit = userCredits[user];
-        credit.creditScore = _calculateCreditScore(
-            credit.transactionVolume,
-            credit.walletBalance,
-            credit.transactionFrequency,
-            credit.transactionMix,
-            credit.newTransactions
+    // Constructor to initialize the percentage weights
+    constructor(
+        uint256 _transactionVolumePercent,
+        uint256 _walletBalancePercent,
+        uint256 _transactionFrequencyPercent,
+        uint256 _transactionMixPercent,
+        uint256 _newTransactionsPercent
+    ) {
+        require(
+            _transactionVolumePercent + _walletBalancePercent + _transactionFrequencyPercent + _transactionMixPercent + _newTransactionsPercent == 100,
+            "Total percentage must be 100"
         );
+        transactionVolumePercent = _transactionVolumePercent;
+        walletBalancePercent = _walletBalancePercent;
+        transactionFrequencyPercent = _transactionFrequencyPercent;
+        transactionMixPercent = _transactionMixPercent;
+        newTransactionsPercent = _newTransactionsPercent;
     }
 
+    // Function to get the credit score of the user calling the function
+    function getCreditScore() external view returns (uint256) {
+        UserCredit storage credit = userCredits[msg.sender];
+        return credit.creditScore;
+    }
+
+    // Function to update the user's credit data and calculate the new credit score
+    function updateCreditScore(
+        uint256 volume,
+        uint256 balance,
+        uint256 frequency,
+        uint256 mix,
+        uint256 newTx
+    ) external {
+        UserCredit storage credit = userCredits[msg.sender];
+        credit.transactionVolume = volume;
+        credit.walletBalance = balance;
+        credit.transactionFrequency = frequency;
+        credit.transactionMix = mix;
+        credit.newTransactions = newTx;
+        credit.creditScore = _calculateCreditScore(volume, balance, frequency, mix, newTx);
+    }
+
+    // Internal function to calculate the credit score based on the given parameters
     function _calculateCreditScore(
         uint256 volume,
         uint256 balance,
         uint256 frequency,
         uint256 mix,
         uint256 newTx
-    ) internal pure returns (uint256) {
+    ) internal view returns (uint256) {
         uint256 score = 300 + (
-            (volume * 35 / 100) +
-            (balance * 30 / 100) +
-            (frequency * 15 / 100) +
-            (mix * 10 / 100) +
-            (newTx * 10 / 100)
+            (volume * transactionVolumePercent / 100) +
+            (balance * walletBalancePercent / 100) +
+            (frequency * transactionFrequencyPercent / 100) +
+            (mix * transactionMixPercent / 100) +
+            (newTx * newTransactionsPercent / 100)
         );
         return score > 850 ? 850 : score;
+    }
+
+    // Functions to update the percentage weights, only callable by the owner
+    function setTransactionVolumePercent(uint256 percent) external onlyOwner {
+        _updatePercentages(percent, walletBalancePercent, transactionFrequencyPercent, transactionMixPercent, newTransactionsPercent);
+        transactionVolumePercent = percent;
+    }
+
+    function setWalletBalancePercent(uint256 percent) external onlyOwner {
+        _updatePercentages(transactionVolumePercent, percent, transactionFrequencyPercent, transactionMixPercent, newTransactionsPercent);
+        walletBalancePercent = percent;
+    }
+
+    function setTransactionFrequencyPercent(uint256 percent) external onlyOwner {
+        _updatePercentages(transactionVolumePercent, walletBalancePercent, percent, transactionMixPercent, newTransactionsPercent);
+        transactionFrequencyPercent = percent;
+    }
+
+    function setTransactionMixPercent(uint256 percent) external onlyOwner {
+        _updatePercentages(transactionVolumePercent, walletBalancePercent, transactionFrequencyPercent, percent, newTransactionsPercent);
+        transactionMixPercent = percent;
+    }
+
+    function setNewTransactionsPercent(uint256 percent) external onlyOwner {
+        _updatePercentages(transactionVolumePercent, walletBalancePercent, transactionFrequencyPercent, transactionMixPercent, percent);
+        newTransactionsPercent = percent;
+    }
+
+    // Internal function to ensure the total percentages add up to 100
+    function _updatePercentages(
+        uint256 volume,
+        uint256 balance,
+        uint256 frequency,
+        uint256 mix,
+        uint256 newTx
+    ) internal pure {
+        require(
+            volume + balance + frequency + mix + newTx == 100,
+            "Total percentage must be 100"
+        );
     }
 }
