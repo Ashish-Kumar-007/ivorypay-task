@@ -2,7 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const { ethers } = require("ethers");
 const { TatumSDK, Network } = require("@tatumio/tatum");
-const contractDetails = require("../artifacts/contracts/CreditScore.sol/CreditScore.json");
+const contractDetails = require("./Contract/contract.json");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
