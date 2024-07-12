@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
-
-contract CreditScore is Ownable {
+contract CreditScore {
     // Private state variables for percentage weights
     uint256 private transactionVolumePercent;
     uint256 private walletBalancePercent;
@@ -84,43 +82,4 @@ contract CreditScore is Ownable {
         return score > 850 ? 850 : score;
     }
 
-    // Functions to update the percentage weights, only callable by the owner
-    function setTransactionVolumePercent(uint256 percent) external onlyOwner {
-        _updatePercentages(percent, walletBalancePercent, transactionFrequencyPercent, transactionMixPercent, newTransactionsPercent);
-        transactionVolumePercent = percent;
-    }
-
-    function setWalletBalancePercent(uint256 percent) external onlyOwner {
-        _updatePercentages(transactionVolumePercent, percent, transactionFrequencyPercent, transactionMixPercent, newTransactionsPercent);
-        walletBalancePercent = percent;
-    }
-
-    function setTransactionFrequencyPercent(uint256 percent) external onlyOwner {
-        _updatePercentages(transactionVolumePercent, walletBalancePercent, percent, transactionMixPercent, newTransactionsPercent);
-        transactionFrequencyPercent = percent;
-    }
-
-    function setTransactionMixPercent(uint256 percent) external onlyOwner {
-        _updatePercentages(transactionVolumePercent, walletBalancePercent, transactionFrequencyPercent, percent, newTransactionsPercent);
-        transactionMixPercent = percent;
-    }
-
-    function setNewTransactionsPercent(uint256 percent) external onlyOwner {
-        _updatePercentages(transactionVolumePercent, walletBalancePercent, transactionFrequencyPercent, transactionMixPercent, percent);
-        newTransactionsPercent = percent;
-    }
-
-    // Internal function to ensure the total percentages add up to 100
-    function _updatePercentages(
-        uint256 volume,
-        uint256 balance,
-        uint256 frequency,
-        uint256 mix,
-        uint256 newTx
-    ) internal pure {
-        require(
-            volume + balance + frequency + mix + newTx == 100,
-            "Total percentage must be 100"
-        );
-    }
 }
