@@ -5,11 +5,13 @@
     "hardhat": "^2.9.9"
   },
   "dependencies": {
+    "@tatumio/tatum": "^4.2.35",
     "alchemy-sdk": "^3.3.1",
     "axios": "^1.7.2",
     "dotenv": "^16.4.5",
     "ethers": "^5.7.1",
     "express": "^4.19.2",
+    "moralis": "^2.26.8",
     "nodemon": "^3.1.4",
     "web3": "^4.10.0"
   },
