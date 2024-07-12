@@ -1,6 +1,6 @@
 require('dotenv').config();
 require('@nomiclabs/hardhat-ethers');
-require('@nomiclabs/hardhat-etherscan');
+require("@nomicfoundation/hardhat-verify");
 
 const { RPC_URL, PRIVATE_KEY, ETHERSCAN_API_KEY } = process.env;
 
@@ -12,7 +12,7 @@ module.exports = {
     },
   },
   solidity: {
-    version: "0.8.24",
+    version: "0.8.26",
     settings: {
       optimizer: {
         enabled: true,

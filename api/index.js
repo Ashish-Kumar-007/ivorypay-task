@@ -103,7 +103,7 @@ function calculateMetrics(transactions) {
 }
 
 // Endpoint to fetch and calculate credit score elements
-app.get("/fetch-data/:address", async (req, res) => {
+app.get("/get-credit-score/:address", async (req, res) => {
   const address = req.params.address;
   const contract = new ethers.Contract(
     contractAddress,
