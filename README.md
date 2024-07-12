@@ -62,7 +62,7 @@ This API interacts with the `CreditScore` smart contract deployed on the Ethereu
 ### Base URL
 
 ```
-https://your-api-base-url.com
+https://onchain-creditscore.vercel.app/
 ```
 
 ### Authentication
@@ -87,7 +87,7 @@ No authentication is required for fetching data. Updating user details requires 
 ```javascript
 const fetchUserData = async (address) => {
   try {
-    const response = await fetch(`https://your-api-base-url.com/get-credit-score/${address}`);
+    const response = await fetch(`https://onchain-creditscore.vercel.app/get-credit-score/${address}`);
     const data = await response.json();
     console.log(data);
   } catch (error) {
@@ -133,7 +133,7 @@ Replace `your-api-base-url` with your actual API base URL.
 7. **Test**: Verify API functionality with tools like `curl` or Postman.
 
 ### Notes
-
+- As it's a demo api so it uses free resources which will limit the fetching the transaction lists of an wallet address
 - Ensure Ethereum node accessibility via the RPC URL.
 - Securely manage private keys and environment variables.
 - Customize error handling and logging for production readiness.
