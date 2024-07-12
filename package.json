@@ -1,7 +1,6 @@
 {
   "name": "onchain_credit_score",
   "devDependencies": {
-    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "@nomicfoundation/hardhat-verify": "^2.0.8",
     "@nomiclabs/hardhat-ethers": "^2.2.3",
     "hardhat": "^2.9.9"
