@@ -6,6 +6,7 @@ contract CreditScore {
     uint256 public constant PRECISION = 1e18;
 
     struct User {
+        uint lastUpdateTimestamp;
         uint transactionVolume;
         uint walletBalance;
         uint transactionFrequency;
@@ -30,26 +31,28 @@ contract CreditScore {
         _;
     }
 
+        // Restrict updating user details to every 21 days
+    modifier onlyAfter(uint lastUpdated) {
+        require(block.timestamp >= lastUpdated + 21 days, "Can only update after 21 days");
+        _;
+    }
+
     constructor() {
         // Add contract deployer as an authorized updater
         owner = msg.sender;
     }
 
-    function updateUserDetails(address user, uint volume, uint balance, uint frequency, uint mix, uint newTxs) public onlyAuthorized {
+    function updateUserDetails(address user, uint volume, uint balance, uint frequency, uint mix, uint newTxs) public onlyAuthorized onlyAfter(users[user].lastUpdateTimestamp) {
         
         require(user != address(0), "Invalid address");
-        require(volume > 0, "Volume must be greater than zero");
-        require(balance >= 0, "Balance must be non-negative");
-        require(frequency >= 0, "Frequency must be non-negative");
-        require(mix >= 0, "Mix must be non-negative");
-        require(newTxs >= 0, "New transactions must be non-negative");
 
         User storage u = users[user];
-        u.transactionVolume = volume;
-        u.walletBalance = balance;
+        u.transactionVolume = (volume * 1e3 / PRECISION) / 1e3;
+        u.walletBalance = (balance * 1e3 / PRECISION) / 1e3;
         u.transactionFrequency = frequency;
         u.transactionMix = mix;
         u.pursuitOfNewTransactions = newTxs;
+        u.lastUpdateTimestamp = block.timestamp;
         updateCreditScore(user);
     }
 
@@ -79,5 +82,3 @@ contract CreditScore {
         u.creditScore = normalizedTotalScore;
     }
 }
-
-

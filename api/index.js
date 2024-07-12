@@ -1,141 +1,182 @@
 require("dotenv").config();
 const express = require("express");
-const axios = require("axios");
 const { ethers } = require("ethers");
-const contractDetails = require("../artifacts/contracts/CreditScore.sol/CreditScore.json");
-const {EvmChain} = require('moralis');
 const { TatumSDK, Network } = require("@tatumio/tatum");
+const contractDetails = require("../artifacts/contracts/CreditScore.sol/CreditScore.json");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 const URL = process.env.RPC_URL;
-const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY;
-const provider = new ethers.providers.JsonRpcProvider(URL); // Use ethers provider
-const contractAddress = process.env.CONTRACT_ADDRESS;
+const provider = new ethers.providers.JsonRpcProvider(URL); // Initialize ethers provider
+const contractAddress = process.env.CONTRACT_ADDRESS; // Ethereum smart contract address
 
 app.use(express.json());
 
-// Function to fetch the balance of the address
+// Function to fetch the balance of an Ethereum address
 const getBalance = async (address) => {
-  const balance = await provider.getBalance(address);
-  return `${balance}`;
-}
+  try {
+    const balance = await provider.getBalance(address);
+    return `${balance}`;
+  } catch (error) {
+    console.error("Error fetching wallet balance:", error.message);
+    throw error; // Propagate the error
+  }
+};
 
-// Function to fetch the transaction list of the address
+// Function to fetch transaction history using Tatum SDK
 const getTransactionHistory = async (address) => {
   try {
-    const tatum = await TatumSDK.init({ 
+    const tatum = await TatumSDK.init({
       network: Network.ETHEREUM_SEPOLIA,
       apiKey: {
-        v4: "t-6691211cc8571e001cb45348-668b135606d94c7ab6a20c22"
-      }
-     });
-     let data = [];
-     let txs;
-     let offSet = 0;
-     const pageSize = 50;
-     
-     do {
-       txs = await tatum.address.getTransactions({
-         address: address,
-         pageSize: pageSize,
-         offset: offSet
-       });
-       offSet += pageSize;
-       data = data.concat(txs.data);
-       if(offSet > 2000){
+        v4: process.env.TATUM_API_KEY,
+      },
+    });
+
+    const pageSize = 50;
+    let data = [];
+    let offset = 0;
+    let txs;
+
+    do {
+      txs = await tatum.address.getTransactions({
+        address: address,
+        pageSize: pageSize,
+        offset: offset,
+      });
+
+      data = data.concat(txs.data);
+      offset += pageSize;
+
+      // Limit the number of transactions fetched for optimization
+      if (offset > 2000) {
         break;
-       }
-     } while (txs.data.length == pageSize);
-     
-     console.log(data.length);
-     return data;
-     
+      }
+    } while (txs.length === pageSize);
+
+    console.log(`Fetched ${data.length} transactions for ${address}`);
+    return data;
   } catch (error) {
-    console.error("Error fetching wallet balance:", error);
+    console.error("Error fetching transaction history:", error.message);
+    throw error; // Propagate the error
   }
-}
-  
+};
+
+// Function to calculate metrics from transaction history
 function calculateMetrics(transactions) {
   let transactionFrequency = 0;
   let transactionVolume = 0;
   let newTransactions = 0;
-  let transactionTypes = new Set(); // Use a Set to store unique transaction types
-  
-  const thirtyDaysAgo = (Date.now() - (30 * 24 * 60 * 60 * 1000)) / 1000; // Calculate the timestamp for 30 days ago
-  
+  let transactionTypes = new Set();
+
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+
   transactions.forEach((tx) => {
     transactionFrequency++;
-  
-    // Calculate transaction volume
-    if(tx.transactionType == "native"){
-     transactionVolume += parseFloat(tx.amount); 
+
+    if (tx.transactionType === "native") {
+      transactionVolume += parseFloat(tx.amount);
     }
-  
-    // Check for new transactions in the last 30 days
-    const txTimestamp = new Date(tx.block_timestamp).getTime() / 1000;
+
+    const txTimestamp = new Date(tx.timestamp).getTime();
     if (txTimestamp > thirtyDaysAgo) {
       newTransactions++;
     }
-  
-    // Collect unique transaction types
+
     transactionTypes.add(tx.transactionType);
   });
-  
-  // Convert the Set back to an array if needed
-  const uniqueTransactionTypes = Array.from(transactionTypes);
-  
+
+  const transactionMix = transactionTypes.size;
+
   console.log(`Transaction Frequency: ${transactionFrequency}`);
   console.log(`Transaction Volume: ${transactionVolume}`);
   console.log(`New Transactions in Last 30 Days: ${newTransactions}`);
-  console.log(`Unique Transaction Types: ${uniqueTransactionTypes}`, transactionTypes.size);
-  const transactionMix = transactionTypes.size;
+  console.log(`Unique Transaction Types: ${Array.from(transactionTypes)}`);
+
   return {
     transactionVolume,
     transactionFrequency,
     transactionMix,
-    newTransactions
+    newTransactions,
   };
 }
 
 // Endpoint to fetch and calculate credit score elements
 app.get("/fetch-data/:address", async (req, res) => {
-  try {
-    const address = req.params.address;
+  const address = req.params.address;
+  const contract = new ethers.Contract(
+    contractAddress,
+    contractDetails.abi,
+    provider
+  );
 
+  try {
     // Fetch account balance
     const balance = await getBalance(address);
 
     // Fetch transaction history
     const transactions = await getTransactionHistory(address);
-    
-const {transactionVolume,
-  transactionFrequency,
-  transactionMix,
-  newTransactions} = calculateMetrics(transactions);
-  const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
-  const contract = new ethers.Contract(contractAddress, contractDetails.abi, provider);
 
+    // Calculate metrics from transactions
+    const {
+      transactionVolume,
+      transactionFrequency,
+      transactionMix,
+      newTransactions,
+    } = calculateMetrics(transactions);
 
-    // // Update credit score on the blockchain
-    await contract.connect(wallet).updateUserDetails(address, ethers.utils.parseUnits(transactionVolume.toString(), 'ether'), ethers.utils.parseUnits(balance.toString(), 'ether'), transactionFrequency, transactionMix, newTransactions);
+    // Initialize ethers.Wallet instance
+    const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
 
-    // // Retrieve updated credit score
+    // Convert transaction volume to Wei
+    const transactionVolumeInWei = ethers.utils.parseEther(
+      transactionVolume.toString()
+    );
+
+    // Send transaction to update user details on the blockchain
+    const tx = await contract
+      .connect(wallet)
+      .updateUserDetails(
+        address,
+        transactionVolumeInWei,
+        balance,
+        transactionFrequency,
+        transactionMix,
+        newTransactions
+      );
+
+    // Wait for the transaction to be mined and confirmed
+    await tx.wait();
+
+    // Retrieve updated credit score
     const creditScore = await contract.getCreditScore(address);
-console.log(transactionMix)
-    res.json({
+
+    // Respond with JSON data
+    const responseData = {
       address: address,
-      balance: balance,
-      transactionVolume: transactionVolume.toFixed(2), // Adjust formatting as needed
+      balance: `${ethers.utils.formatEther(balance.toString())} ETH`,
+      transactionVolume: `${transactionVolume.toFixed(2)} ETH`,
       transactionFrequency: transactionFrequency,
       newTransactions: newTransactions,
       transactionMix: transactionMix,
-      creditScore: `${creditScore}` // Ensure it's converted to string
-    });
+      creditScore: `${creditScore}`,
+    };
+
+    res.json(responseData);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Internal Server Error" });
+    if (error.message.includes("Can only update after 21 days")) {
+       // Retrieve updated credit score
+    const creditScore = await contract.getCreditScore(address);
+      console.log("User can only update after 21 days.");
+      res.status(400).json({
+        "current credit Score": `${creditScore}`,
+        error: "Can only update after 21 days",
+      });
+    } else {
+      console.error("Internal Server Error:", error.message);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
   }
 });
 

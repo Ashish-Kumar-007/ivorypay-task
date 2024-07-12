@@ -1,94 +1,74 @@
-const { expect } = require("chai");
-const { ethers } = require("hardhat");
+const { expect } = require('chai');
+const  ethers = require('hardhat');
 
-describe("CreditScore Contract", function () {
-    let CreditScore, creditScore, owner, addr1, addr2;
+describe('CreditScore', function () {
+  let creditScoreContract;
+  let owner;
+  let user1;
+  let user2;
 
-    beforeEach(async function () {
-        CreditScore = await ethers.getContractFactory("CreditScore");
-        [owner, addr1, addr2, ...addrs] = await ethers.getSigners();
-        creditScore = await CreditScore.deploy();
-        await creditScore.deployed();
+  const PRECISION = 10**18;
+
+  before(async function () {
+    [owner, user1, user2] = await ethers.getSigners();
+
+    const CreditScore = await ethers.getContractFactory('CreditScore');
+    creditScoreContract = await CreditScore.deploy();
+    await creditScoreContract.deployed();
+  });
+
+  describe('updateUserDetails', function () {
+    it('Should update user details correctly', async function () {
+      const volume = ethers.utils.parseEther('100');
+      const balance = ethers.utils.parseEther('10');
+      const frequency = 10;
+      const mix = 5;
+      const newTxs = 20;
+
+      await creditScoreContract.updateUserDetails(user1.address, volume, balance, frequency, mix, newTxs);
+      const userScore = await creditScoreContract.getCreditScore(user1.address);
+
+      // You may adjust these expectations based on your specific scoring formula
+      expect(userScore).to.be.above(300).and.to.be.below(850);
     });
 
-    describe("Deployment", function () {
-        it("Should set the right owner", async function () {
-            expect(await creditScore.owner()).to.equal(owner.address);
-        });
+    it('Should revert if not called by the owner', async function () {
+      const volume = ethers.utils.parseEther('100');
+      const balance = ethers.utils.parseEther('10');
+      const frequency = 10;
+      const mix = 5;
+      const newTxs = 20;
+
+      await expect(
+        creditScoreContract.connect(user2).updateUserDetails(user1.address, volume, balance, frequency, mix, newTxs)
+      ).to.be.revertedWith('Not authorized');
     });
 
-    describe("Updating Metrics and Calculating Credit Score", function () {
-        it("Should update transaction volume and calculate credit score", async function () {
-            await creditScore.updateTransactionVolume(addr1.address, ethers.utils.parseEther("10"));
-            const user = await creditScore.users(addr1.address);
-            expect(user.transactionVolume).to.equal(ethers.utils.parseEther("10"));
-            expect(user.creditScore).to.be.above(300);
-        });
+    it('Should revert if trying to update within 21 days', async function () {
+      const volume = ethers.utils.parseEther('100');
+      const balance = ethers.utils.parseEther('10');
+      const frequency = 10;
+      const mix = 5;
+      const newTxs = 20;
 
-        it("Should update wallet balance and calculate credit score", async function () {
-            await creditScore.updateWalletBalance(addr1.address, ethers.utils.parseEther("20"));
-            const user = await creditScore.users(addr1.address);
-            expect(user.walletBalance).to.equal(ethers.utils.parseEther("20"));
-            expect(user.creditScore).to.be.above(300);
-        });
+      await creditScoreContract.updateUserDetails(user1.address, volume, balance, frequency, mix, newTxs);
 
-        it("Should update transaction frequency and calculate credit score", async function () {
-            await creditScore.updateTransactionFrequency(addr1.address, 50);
-            const user = await creditScore.users(addr1.address);
-            expect(user.transactionFrequency).to.equal(50);
-            expect(user.creditScore).to.be.above(300);
-        });
-
-        it("Should update transaction mix and calculate credit score", async function () {
-            await creditScore.updateTransactionMix(addr1.address, 5);
-            const user = await creditScore.users(addr1.address);
-            expect(user.transactionMix).to.equal(5);
-            expect(user.creditScore).to.be.above(300);
-        });
-
-        it("Should update pursuit of new transactions and calculate credit score", async function () {
-            await creditScore.updatePursuitOfNewTransactions(addr1.address, 25);
-            const user = await creditScore.users(addr1.address);
-            expect(user.pursuitOfNewTransactions).to.equal(25);
-            expect(user.creditScore).to.be.above(300);
-        });
+      // Attempt to update again within 21 days
+      await expect(
+        creditScoreContract.updateUserDetails(user1.address, volume, balance, frequency, mix, newTxs)
+      ).to.be.revertedWith('Can only update after 21 days');
     });
 
-    describe("Access Control", function () {
-        it("Should revert when non-owner tries to update metrics", async function () {
-            await expect(
-                creditScore.connect(addr1).updateTransactionVolume(addr2.address, ethers.utils.parseEther("10"))
-            ).to.be.revertedWith("Not authorized");
+    it('Should revert if an invalid address is provided', async function () {
+      const volume = ethers.utils.parseEther('100');
+      const balance = ethers.utils.parseEther('10');
+      const frequency = 10;
+      const mix = 5;
+      const newTxs = 20;
 
-            await expect(
-                creditScore.connect(addr1).updateWalletBalance(addr2.address, ethers.utils.parseEther("20"))
-            ).to.be.revertedWith("Not authorized");
-
-            await expect(
-                creditScore.connect(addr1).updateTransactionFrequency(addr2.address, 50)
-            ).to.be.revertedWith("Not authorized");
-
-            await expect(
-                creditScore.connect(addr1).updateTransactionMix(addr2.address, 5)
-            ).to.be.revertedWith("Not authorized");
-
-            await expect(
-                creditScore.connect(addr1).updatePursuitOfNewTransactions(addr2.address, 25)
-            ).to.be.revertedWith("Not authorized");
-        });
+      await expect(
+        creditScoreContract.updateUserDetails(ethers.constants.AddressZero, volume, balance, frequency, mix, newTxs)
+      ).to.be.revertedWith('Invalid address');
     });
-
-    describe("Getting User Credit Score", function () {
-        it("Should return the correct credit score for a user", async function () {
-            await creditScore.updateTransactionVolume(addr1.address, ethers.utils.parseEther("10"));
-            await creditScore.updateWalletBalance(addr1.address, ethers.utils.parseEther("20"));
-            await creditScore.updateTransactionFrequency(addr1.address, 50);
-            await creditScore.updateTransactionMix(addr1.address, 5);
-            await creditScore.updatePursuitOfNewTransactions(addr1.address, 25);
-
-            const creditScoreValue = await creditScore.getUserCreditScore(addr1.address);
-            expect(creditScoreValue).to.be.above(300);
-            expect(creditScoreValue).to.be.below(850);
-        });
-    });
+  });
 });
